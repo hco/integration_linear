@@ -1,6 +1,6 @@
 {
   "domain": "integration_linear",
-  "name": "Integration blueprint",
+  "name": "Linear Integration",
   "codeowners": ["@ludeeus"],
   "config_flow": true,
   "documentation": "https://github.com/ludeeus/integration_linear",
