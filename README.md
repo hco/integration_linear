@@ -20,7 +20,9 @@ This repository contains multiple files, here is a overview:
 
 | File                                     | Purpose                                                                                                               |  Documentation                                                                                                                 |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `.devcontainer.json`                     | Used for development/testing with Visual Studio Code.                                                                 | [Documentation](https://code.visualstudio.com/docs/remote/containers)                                                          |
+| `mise.toml`                              | Configuration for mise (dev tools and tasks).                                                                         | [Documentation](https://mise.jdx.dev/)                                                                                          |
+| `.python-version`                        | Specifies the Python version for this project.                                                                        | [Documentation](https://mise.jdx.dev/lang/python.html)                                                                         |
+| `.devcontainer.json`                     | Used for development/testing with Visual Studio Code devcontainers.                                                  | [Documentation](https://code.visualstudio.com/docs/remote/containers)                                                          |
 | `.github/ISSUE_TEMPLATE/*.yml`           | Templates for the issue tracker                                                                                       | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository) |
 | `custom_components/integration_linear/*` | Integration files, this is where everything happens.                                                                  | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)                                            |
 | `CONTRIBUTING.md`                        | Guidelines on how to contribute.                                                                                      | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)  |
@@ -31,10 +33,34 @@ This repository contains multiple files, here is a overview:
 ## How?
 
 1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
+1. Clone your new repository locally.
+1. Choose your development setup method (see below).
 1. Rename all instances of the `integration_linear` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
 1. Rename all instances of the `Linear Integration` to `<Your Integration Name>` (e.g. `Awesome Integration`).
-1. Run the `scripts/develop` to start HA and test out your new integration.
+
+### Development Setup Options
+
+#### Option 1: Using mise (Recommended)
+
+1. Install [mise](https://mise.jdx.dev/) if you haven't already.
+1. In the repository directory, run `mise install` to install Python 3.13 and set up the development environment.
+1. Run `mise run setup` to install Python dependencies.
+1. Run `mise run develop` to start HA and test out your new integration.
+
+**Available mise tasks:**
+- `mise run setup` - Install Python dependencies from requirements.txt
+- `mise run lint` - Format and lint code with ruff (auto-fixes issues)
+- `mise run lint-check` - Check code formatting and linting without fixing
+- `mise run format` - Format code with ruff
+- `mise run check` - Check code with ruff (without fixing)
+- `mise run develop` - Start Home Assistant in development mode
+
+#### Option 2: Using Dev Containers
+
+1. Open your new repository in Visual Studio Code.
+1. Use the "Dev Containers: Clone Repository in Named Container Volume..." option (or reopen in container if already cloned).
+1. The devcontainer will automatically run `scripts/setup` to install dependencies.
+1. Run `scripts/develop` to start HA and test out your new integration.
 
 ## Next steps
 

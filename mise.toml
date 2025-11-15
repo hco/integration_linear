@@ -1,0 +1,39 @@
+[tools]
+python = "3.13"
+
+[env]
+# Automatic virtualenv activation
+# Install seed packages (pip, setuptools, and wheel) into the virtual environment
+_.python.venv = { path = ".venv", create = true, uv_create_args = ['--seed'] }
+# Note: PYTHONPATH is automatically set by the develop script when running `mise run develop`
+
+[tasks.setup]
+description = "Install Python dependencies from requirements.txt"
+run = "bash scripts/setup"
+
+[tasks.lint]
+description = "Format and lint code with ruff"
+run = """
+ruff format .
+ruff check . --fix
+"""
+
+[tasks.lint-check]
+description = "Check code formatting and linting without fixing"
+run = """
+ruff format . --check
+ruff check .
+"""
+
+[tasks.develop]
+description = "Start Home Assistant in development mode"
+run = "bash scripts/develop"
+
+[tasks.format]
+description = "Format code with ruff"
+run = "ruff format ."
+
+[tasks.check]
+description = "Check code with ruff (without fixing)"
+run = "ruff check ."
+
