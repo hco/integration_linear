@@ -1,12 +1,10 @@
 {
-  "domain": "integration_blueprint",
+  "domain": "integration_linear",
   "name": "Integration blueprint",
-  "codeowners": [
-    "@ludeeus"
-  ],
+  "codeowners": ["@ludeeus"],
   "config_flow": true,
-  "documentation": "https://github.com/ludeeus/integration_blueprint",
+  "documentation": "https://github.com/ludeeus/integration_linear",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/ludeeus/integration_blueprint/issues",
+  "issue_tracker": "https://github.com/ludeeus/integration_linear/issues",
   "version": "0.1.0"
 }
