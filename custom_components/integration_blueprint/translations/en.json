@@ -2,20 +2,50 @@
   "config": {
     "step": {
       "user": {
-        "description": "If you need help with the configuration have a look here: https://github.com/ludeeus/integration_linear",
+        "description": "Enter your Linear API token. You can create one at https://linear.app/settings/account/security/api-keys/new",
         "data": {
-          "username": "Username",
-          "password": "Password"
+          "api_token": "API Token"
+        }
+      },
+      "teams": {
+        "title": "Select Teams",
+        "description": "Select which Linear teams you want to create todo list entities for.",
+        "data": {
+          "teams": "Teams"
         }
       }
     },
     "error": {
-      "auth": "Username/Password is wrong.",
-      "connection": "Unable to connect to the server.",
-      "unknown": "Unknown error occurred."
+      "auth": "Invalid API token.",
+      "connection": "Unable to connect to Linear API.",
+      "unknown": "Unknown error occurred.",
+      "fetch_teams_failed": "Failed to fetch teams from Linear.",
+      "no_teams_selected": "Please select at least one team."
     },
     "abort": {
       "already_configured": "This entry is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Select Teams",
+        "description": "Select which Linear teams you want to create todo list entities for.",
+        "data": {
+          "teams": "Teams"
+        }
+      },
+      "options_teams": {
+        "title": "Select Teams",
+        "description": "Select which Linear teams you want to create todo list entities for.",
+        "data": {
+          "teams": "Teams"
+        }
+      }
+    },
+    "error": {
+      "fetch_teams_failed": "Failed to fetch teams from Linear.",
+      "no_teams_selected": "Please select at least one team."
     }
   }
 }

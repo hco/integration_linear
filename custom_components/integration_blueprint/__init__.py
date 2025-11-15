@@ -10,12 +10,12 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_loaded_integration
 
 from .api import IntegrationBlueprintApiClient
-from .const import DOMAIN, LOGGER
+from .const import CONF_API_TOKEN, DOMAIN, LOGGER
 from .coordinator import BlueprintDataUpdateCoordinator
 from .data import IntegrationBlueprintData
 
@@ -25,9 +25,7 @@ if TYPE_CHECKING:
     from .data import IntegrationBlueprintConfigEntry
 
 PLATFORMS: list[Platform] = [
-    Platform.SENSOR,
-    Platform.BINARY_SENSOR,
-    Platform.SWITCH,
+    Platform.TODO,
 ]
 
 
@@ -37,6 +35,9 @@ async def async_setup_entry(
     entry: IntegrationBlueprintConfigEntry,
 ) -> bool:
     """Set up this integration using UI."""
+    # Unload platforms first if they exist (for reload scenarios)
+    await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    
     coordinator = BlueprintDataUpdateCoordinator(
         hass=hass,
         logger=LOGGER,
@@ -45,8 +46,7 @@ async def async_setup_entry(
     )
     entry.runtime_data = IntegrationBlueprintData(
         client=IntegrationBlueprintApiClient(
-            username=entry.data[CONF_USERNAME],
-            password=entry.data[CONF_PASSWORD],
+            api_token=entry.data[CONF_API_TOKEN],
             session=async_get_clientsession(hass),
         ),
         integration=async_get_loaded_integration(hass, entry.domain),
@@ -74,5 +74,6 @@ async def async_reload_entry(
     hass: HomeAssistant,
     entry: IntegrationBlueprintConfigEntry,
 ) -> None:
-    """Reload config entry."""
+    """Reload config entry when options are updated."""
+    # Reload the entry to pick up new team selections
     await hass.config_entries.async_reload(entry.entry_id)
