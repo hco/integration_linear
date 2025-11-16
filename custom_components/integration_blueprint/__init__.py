@@ -36,8 +36,10 @@ async def async_setup_entry(
 ) -> bool:
     """Set up this integration using UI."""
     # Unload platforms first if they exist (for reload scenarios)
-    await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
+    # Only attempt to unload if the entry was previously set up
+    if hasattr(entry, "runtime_data") and entry.runtime_data is not None:
+        await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
     coordinator = BlueprintDataUpdateCoordinator(
         hass=hass,
         logger=LOGGER,
