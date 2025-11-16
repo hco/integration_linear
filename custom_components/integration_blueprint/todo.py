@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.todo import TodoItem, TodoListEntity
+from homeassistant.components.todo import TodoItem, TodoItemStatus, TodoListEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ATTRIBUTION, CONF_TEAMS
+from .const import ATTRIBUTION, CONF_TEAMS, CONF_TEAM_STATES
 from .coordinator import BlueprintDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -63,29 +63,109 @@ class LinearTodoListEntity(
         super().__init__(coordinator)
         self._team_id = team_id
         self._team_name = team_name
+        self._entry_id = entry_id
         self._attr_unique_id = f"{entry_id}_{team_id}"
         self._attr_name = f"Linear {team_name}"
 
     @property
     def todo_items(self) -> list[TodoItem]:
         """Return the todo items."""
-        # Empty todo list - no items yet
-        return []
+        if not self.coordinator.data:
+            return []
+        
+        team_data = self.coordinator.data.get(self._team_id, {})
+        todo_issues = team_data.get("todo", [])
+        completed_issues = team_data.get("completed", [])
+        
+        items: list[TodoItem] = []
+        
+        # Map todo_states issues to TodoItems with NEEDS_ACTION status
+        for issue in todo_issues:
+            items.append(
+                TodoItem(
+                    uid=issue["id"],
+                    summary=issue.get("title", ""),
+                    status=TodoItemStatus.NEEDS_ACTION,
+                )
+            )
+        
+        # Map completed_state issues to TodoItems with COMPLETED status
+        for issue in completed_issues:
+            items.append(
+                TodoItem(
+                    uid=issue["id"],
+                    summary=issue.get("title", ""),
+                    status=TodoItemStatus.COMPLETED,
+                )
+            )
+        
+        return items
 
     async def async_create_todo_item(self, item: TodoItem) -> None:
         """Add an item to the todo list."""
-        # Empty todo list - no-op for now
-        # Will be implemented when we add todo fetching/creation
+        client = self.coordinator.config_entry.runtime_data.client
+        team_states = self.coordinator.config_entry.data.get(CONF_TEAM_STATES, {})
+        team_config = team_states.get(self._team_id, {})
+        todo_states = team_config.get("todo_states", [])
+        
+        if not todo_states:
+            raise ValueError("No todo states configured for this team")
+        
+        # Use the first todo_state for new issues
+        state_id = todo_states[0]
+        
+        await client.async_create_issue(
+            title=item.summary or "",
+            team_id=self._team_id,
+            state_id=state_id,
+            description=None,
+        )
+        
+        # Refresh coordinator to sync UI
+        await self.coordinator.async_request_refresh()
 
     async def async_update_todo_item(
         self, item: TodoItem, update_fields: dict[str, Any]
     ) -> None:
         """Update an item in the todo list."""
-        # Empty todo list - no-op for now
-        # Will be implemented when we add todo fetching/updating
+        client = self.coordinator.config_entry.runtime_data.client
+        team_states = self.coordinator.config_entry.data.get(CONF_TEAM_STATES, {})
+        team_config = team_states.get(self._team_id, {})
+        todo_states = team_config.get("todo_states", [])
+        completed_state = team_config.get("completed_state")
+        
+        issue_id = item.uid
+        new_status = update_fields.get("status")
+        
+        if new_status == TodoItemStatus.COMPLETED:
+            # Move issue to completed_state
+            if not completed_state:
+                raise ValueError("No completed state configured for this team")
+            await client.async_update_issue(issue_id, completed_state)
+        elif new_status == TodoItemStatus.NEEDS_ACTION:
+            # Move issue back to first todo_state
+            if not todo_states:
+                raise ValueError("No todo states configured for this team")
+            state_id = todo_states[0]
+            await client.async_update_issue(issue_id, state_id)
+        
+        # Refresh coordinator to sync UI
+        await self.coordinator.async_request_refresh()
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
         """Delete items from the todo list."""
-        # Empty todo list - no-op for now
-        # Will be implemented when we add todo fetching/deletion
+        client = self.coordinator.config_entry.runtime_data.client
+        team_states = self.coordinator.config_entry.data.get(CONF_TEAM_STATES, {})
+        team_config = team_states.get(self._team_id, {})
+        removed_state = team_config.get("removed_state")
+        
+        if not removed_state:
+            raise ValueError("No removed state configured for this team")
+        
+        # Move each issue to removed_state
+        for issue_id in uids:
+            await client.async_update_issue(issue_id, removed_state)
+        
+        # Refresh coordinator to sync UI
+        await self.coordinator.async_request_refresh()
 

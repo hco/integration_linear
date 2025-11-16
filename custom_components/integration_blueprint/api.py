@@ -63,7 +63,7 @@ class IntegrationBlueprintApiClient:
     async def async_get_workflow_states(self, team_id: str) -> list[dict[str, Any]]:
         """Get workflow states for a specific team."""
         query = """
-        query GetTeamStates($teamId: String!) {
+        query GetTeamStates($teamId: ID!) {
             team(id: $teamId) {
                 states {
                     nodes {
@@ -83,6 +83,153 @@ class IntegrationBlueprintApiClient:
         """Get data from the API."""
         # Placeholder for future implementation
         return {}
+
+    async def async_get_issues(
+        self,
+        team_id: str,
+        state_ids: list[str],
+        updated_since: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get issues for a team filtered by state IDs and optionally by update date."""
+        # Build filter conditionally based on whether updated_since is provided
+        if updated_since:
+            query = """
+            query GetIssues($teamId: ID!, $stateIds: [ID!]!, $updatedSince: DateTimeOrDuration!) {
+                issues(
+                    filter: {
+                        team: { id: { eq: $teamId } }
+                        state: { id: { in: $stateIds } }
+                        updatedAt: { gte: $updatedSince }
+                    }
+                ) {
+                    nodes {
+                        id
+                        title
+                        description
+                        state {
+                            id
+                            name
+                        }
+                        updatedAt
+                        url
+                    }
+                }
+            }
+            """
+            variables: dict[str, Any] = {
+                "teamId": team_id,
+                "stateIds": state_ids,
+                "updatedSince": updated_since,
+            }
+        else:
+            query = """
+            query GetIssues($teamId: ID!, $stateIds: [ID!]!) {
+                issues(
+                    filter: {
+                        team: { id: { eq: $teamId } }
+                        state: { id: { in: $stateIds } }
+                    }
+                ) {
+                    nodes {
+                        id
+                        title
+                        description
+                        state {
+                            id
+                            name
+                        }
+                        updatedAt
+                        url
+                    }
+                }
+            }
+            """
+            variables: dict[str, Any] = {
+                "teamId": team_id,
+                "stateIds": state_ids,
+            }
+
+        result = await self._graphql_query(query, variables)
+        return result.get("data", {}).get("issues", {}).get("nodes", [])
+
+    async def async_update_issue(
+        self,
+        issue_id: str,
+        state_id: str,
+    ) -> dict[str, Any]:
+        """Update an issue's state."""
+        mutation = """
+        mutation UpdateIssue($issueId: ID!, $stateId: ID!) {
+            issueUpdate(id: $issueId, input: { stateId: $stateId }) {
+                success
+                issue {
+                    id
+                    title
+                    state {
+                        id
+                        name
+                    }
+                    updatedAt
+                }
+            }
+        }
+        """
+        variables = {
+            "issueId": issue_id,
+            "stateId": state_id,
+        }
+        result = await self._graphql_query(mutation, variables)
+        issue_update = result.get("data", {}).get("issueUpdate", {})
+        if not issue_update.get("success"):
+            raise IntegrationBlueprintApiClientError("Failed to update issue")
+        return issue_update.get("issue", {})
+
+    async def async_create_issue(
+        self,
+        title: str,
+        team_id: str,
+        state_id: str,
+        description: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new issue."""
+        mutation = """
+        mutation CreateIssue($title: String!, $teamId: ID!, $stateId: ID!, $description: String) {
+            issueCreate(
+                input: {
+                    title: $title
+                    teamId: $teamId
+                    stateId: $stateId
+                    description: $description
+                }
+            ) {
+                success
+                issue {
+                    id
+                    title
+                    description
+                    state {
+                        id
+                        name
+                    }
+                    updatedAt
+                    url
+                }
+            }
+        }
+        """
+        variables: dict[str, Any] = {
+            "title": title,
+            "teamId": team_id,
+            "stateId": state_id,
+        }
+        if description:
+            variables["description"] = description
+
+        result = await self._graphql_query(mutation, variables)
+        issue_create = result.get("data", {}).get("issueCreate", {})
+        if not issue_create.get("success"):
+            raise IntegrationBlueprintApiClientError("Failed to create issue")
+        return issue_create.get("issue", {})
 
     async def _graphql_query(self, query: str, variables: dict | None = None) -> Any:
         """Execute a GraphQL query."""

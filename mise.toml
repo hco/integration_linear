@@ -1,5 +1,6 @@
 [tools]
 python = "3.13"
+watchexec = "latest"
 
 [env]
 # Automatic virtualenv activation
@@ -30,6 +31,10 @@ ruff check .
 description = "Start Home Assistant in development mode"
 run = "bash scripts/develop"
 depends = "setup"
+
+[tasks.watch-develop]
+description = "Watch for file changes and auto-restart Home Assistant"
+run = "watchexec --watch custom_components --exts py --ignore '**/__pycache__/**' --ignore '**/*.pyc' -- mise run develop"
 
 [tasks.format]
 description = "Format code with ruff"
