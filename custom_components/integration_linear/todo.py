@@ -59,7 +59,8 @@ class LinearTodoListEntity(
     # Enable support for creating, updating, and deleting todo items
     _attr_supported_features = (
         TodoListEntityFeature.CREATE_TODO_ITEM | TodoListEntityFeature.UPDATE_TODO_ITEM
-        # | TodoListEntityFeature.DELETE_TODO_ITEM disabled because the UX was not as I expected
+        # disabled because the UX was not as I expected
+        # | TodoListEntityFeature.DELETE_TODO_ITEM
     )
 
     def __init__(
@@ -119,7 +120,8 @@ class LinearTodoListEntity(
         todo_states = team_config.get("todo_states", [])
 
         if not todo_states:
-            raise ValueError("No todo states configured for this team")
+            msg = "No todo states configured for this team"
+            raise ValueError(msg)
 
         # Use the first todo_state for new issues
         state_id = todo_states[0]
@@ -208,7 +210,8 @@ class LinearTodoListEntity(
         removed_state = team_config.get("removed_state")
 
         if not removed_state:
-            raise ValueError("No removed state configured for this team")
+            msg = "No removed state configured for this team"
+            raise ValueError(msg)
 
         # Move each issue to removed_state
         for issue_id in uids:
