@@ -159,7 +159,7 @@ class IntegrationBlueprintApiClient:
     ) -> dict[str, Any]:
         """Update an issue's state."""
         mutation = """
-        mutation UpdateIssue($issueId: ID!, $stateId: ID!) {
+        mutation UpdateIssue($issueId: String!, $stateId: String) {
             issueUpdate(id: $issueId, input: { stateId: $stateId }) {
                 success
                 issue {
@@ -193,7 +193,7 @@ class IntegrationBlueprintApiClient:
     ) -> dict[str, Any]:
         """Create a new issue."""
         mutation = """
-        mutation CreateIssue($title: String!, $teamId: ID!, $stateId: ID!, $description: String) {
+        mutation CreateIssue($title: String!, $teamId: String!, $stateId: String, $description: String) {
             issueCreate(
                 input: {
                     title: $title

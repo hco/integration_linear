@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.todo import TodoItem, TodoItemStatus, TodoListEntity
+from homeassistant.components.todo import (
+    TodoItem,
+    TodoItemStatus,
+    TodoListEntity,
+    TodoListEntityFeature,
+)
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import ATTRIBUTION, CONF_TEAMS, CONF_TEAM_STATES
@@ -51,6 +56,12 @@ class LinearTodoListEntity(
     """Linear todo list entity."""
 
     _attr_attribution = ATTRIBUTION
+    # Enable support for creating, updating, and deleting todo items
+    _attr_supported_features = (
+        TodoListEntityFeature.CREATE_TODO_ITEM
+        | TodoListEntityFeature.UPDATE_TODO_ITEM
+        # | TodoListEntityFeature.DELETE_TODO_ITEM disabled because the UX was not as I expected
+    )
 
     def __init__(
         self,
