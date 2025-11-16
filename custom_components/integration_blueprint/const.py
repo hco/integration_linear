@@ -9,3 +9,4 @@ ATTRIBUTION = "Data provided by Linear"
 
 CONF_API_TOKEN = "api_token"
 CONF_TEAMS = "teams"
+CONF_TEAM_STATES = "team_states"

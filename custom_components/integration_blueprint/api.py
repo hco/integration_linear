@@ -60,6 +60,25 @@ class IntegrationBlueprintApiClient:
         result = await self._graphql_query(query)
         return result.get("data", {}).get("teams", {}).get("nodes", [])
 
+    async def async_get_workflow_states(self, team_id: str) -> list[dict[str, Any]]:
+        """Get workflow states for a specific team."""
+        query = """
+        query GetTeamStates($teamId: String!) {
+            team(id: $teamId) {
+                states {
+                    nodes {
+                        id
+                        name
+                        type
+                    }
+                }
+            }
+        }
+        """
+        variables = {"teamId": team_id}
+        result = await self._graphql_query(query, variables)
+        return result.get("data", {}).get("team", {}).get("states", {}).get("nodes", [])
+
     async def async_get_data(self) -> Any:
         """Get data from the API."""
         # Placeholder for future implementation
