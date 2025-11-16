@@ -12,7 +12,7 @@ from homeassistant.components.todo import (
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import ATTRIBUTION, CONF_TEAMS, CONF_TEAM_STATES
+from .const import ATTRIBUTION, CONF_TEAMS, CONF_TEAM_STATES, LOGGER
 from .coordinator import BlueprintDataUpdateCoordinator
 
 if TYPE_CHECKING:
@@ -136,7 +136,7 @@ class LinearTodoListEntity(
         await self.coordinator.async_request_refresh()
 
     async def async_update_todo_item(
-        self, item: TodoItem, update_fields: dict[str, Any]
+        self, item: TodoItem, update_fields: dict[str, Any] | None = None
     ) -> None:
         """Update an item in the todo list."""
         client = self.coordinator.config_entry.runtime_data.client
@@ -146,19 +146,55 @@ class LinearTodoListEntity(
         completed_state = team_config.get("completed_state")
         
         issue_id = item.uid
+        # Handle case where update_fields might be None or empty
+        if update_fields is None:
+            update_fields = {}
         new_status = update_fields.get("status")
+        
+        # If status is not in update_fields, check the item's current status
+        # This handles cases where Home Assistant passes the updated item directly
+        if new_status is None:
+            new_status = item.status
+        
+        LOGGER.debug(
+            "Updating todo item %s: new_status=%s, update_fields=%s",
+            issue_id,
+            new_status,
+            update_fields,
+        )
         
         if new_status == TodoItemStatus.COMPLETED:
             # Move issue to completed_state
             if not completed_state:
-                raise ValueError("No completed state configured for this team")
-            await client.async_update_issue(issue_id, completed_state)
+                error_msg = f"No completed state configured for team {self._team_name} ({self._team_id})"
+                LOGGER.error(error_msg)
+                raise ValueError(error_msg)
+            try:
+                await client.async_update_issue(issue_id, completed_state)
+                LOGGER.debug("Successfully moved issue %s to completed state", issue_id)
+            except Exception as e:
+                LOGGER.error("Failed to update issue %s to completed state: %s", issue_id, e)
+                raise
         elif new_status == TodoItemStatus.NEEDS_ACTION:
             # Move issue back to first todo_state
             if not todo_states:
-                raise ValueError("No todo states configured for this team")
+                error_msg = f"No todo states configured for team {self._team_name} ({self._team_id})"
+                LOGGER.error(error_msg)
+                raise ValueError(error_msg)
             state_id = todo_states[0]
-            await client.async_update_issue(issue_id, state_id)
+            try:
+                await client.async_update_issue(issue_id, state_id)
+                LOGGER.debug("Successfully moved issue %s to todo state", issue_id)
+            except Exception as e:
+                LOGGER.error("Failed to update issue %s to todo state: %s", issue_id, e)
+                raise
+        else:
+            LOGGER.warning(
+                "Unknown status update for issue %s: %s (update_fields: %s)",
+                issue_id,
+                new_status,
+                update_fields,
+            )
         
         # Refresh coordinator to sync UI
         await self.coordinator.async_request_refresh()
