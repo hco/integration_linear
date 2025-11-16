@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.todo import (
@@ -62,6 +63,7 @@ class LinearTodoListEntity(
         TodoListEntityFeature.CREATE_TODO_ITEM
         | TodoListEntityFeature.UPDATE_TODO_ITEM
         | TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
+        | TodoListEntityFeature.SET_DUE_DATE_ON_ITEM
         # disabled because the UX was not as I expected
         # | TodoListEntityFeature.DELETE_TODO_ITEM
     )
@@ -98,6 +100,7 @@ class LinearTodoListEntity(
                 summary=issue.get("title", ""),
                 status=TodoItemStatus.NEEDS_ACTION,
                 description=issue.get("description"),
+                due=self._parse_due_date(issue.get("dueDate")),
             )
             for issue in todo_issues
         ]
@@ -109,11 +112,55 @@ class LinearTodoListEntity(
                 summary=issue.get("title", ""),
                 status=TodoItemStatus.COMPLETED,
                 description=issue.get("description"),
+                due=self._parse_due_date(issue.get("dueDate")),
             )
             for issue in completed_issues
         )
 
         return items
+
+    @staticmethod
+    def _parse_due_date(due_date_str: str | None) -> date | None:
+        """
+        Parse Linear's dueDate string to Home Assistant's date format.
+
+        Linear returns ISO 8601 DateTime strings, but we only support dates.
+        We extract the date portion and return it as a date object.
+        """
+        if not due_date_str:
+            return None
+
+        try:
+            # Linear returns ISO 8601 DateTime strings, but we only need the date
+            # Parse as datetime first to handle timezone info, then extract date
+            normalized = due_date_str.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(normalized)
+            # Always return just the date portion
+            return parsed.date()
+        except (ValueError, AttributeError):
+            LOGGER.warning("Failed to parse due date: %s", due_date_str)
+            return None
+
+    @staticmethod
+    def _format_due_date(due: date | datetime | None) -> str | None:
+        """
+        Format Home Assistant's due date to Linear's ISO 8601 date format.
+
+        Linear expects ISO 8601 date strings (YYYY-MM-DD).
+        If a datetime is provided, we extract just the date portion.
+        """
+        if due is None:
+            return None
+
+        # If it's a datetime, extract just the date
+        if isinstance(due, datetime):
+            due = due.date()
+
+        # Format as ISO date string (YYYY-MM-DD)
+        if isinstance(due, date):
+            return due.isoformat()
+
+        return None
 
     async def async_create_todo_item(self, item: TodoItem) -> None:
         """Add an item to the todo list."""
@@ -134,6 +181,7 @@ class LinearTodoListEntity(
             team_id=self._team_id,
             state_id=state_id,
             description=item.description,
+            due_date=self._format_due_date(item.due),
         )
 
         # Refresh coordinator to sync UI
@@ -156,6 +204,8 @@ class LinearTodoListEntity(
         description_updated = (
             update_fields is None or "description" in (update_fields or {})
         )
+        # Check if due date needs to be updated
+        due_updated = update_fields is None or "due" in (update_fields or {})
 
         # Handle case where update_fields might be None or empty
         if update_fields is None:
@@ -169,11 +219,12 @@ class LinearTodoListEntity(
 
         LOGGER.debug(
             "Updating todo item %s: new_status=%s, update_fields=%s, "
-            "description_updated=%s",
+            "description_updated=%s, due_updated=%s",
             issue_id,
             new_status,
             update_fields,
             description_updated,
+            due_updated,
         )
 
         # Determine if we need to update status
@@ -191,8 +242,10 @@ class LinearTodoListEntity(
                 update_fields,
             )
 
-        # If both description and status need updating, do it in one call
-        if description_updated and status_changed:
+        # Check if we need to update any fields (description, due, or status)
+        fields_updated = description_updated or due_updated
+        # If both description/due and status need updating, do it in one call
+        if fields_updated and status_changed:
             if new_status == TodoItemStatus.COMPLETED:
                 if not completed_state:
                     error_msg = (
@@ -205,11 +258,14 @@ class LinearTodoListEntity(
                     await client.async_update_issue(
                         issue_id=issue_id,
                         state_id=completed_state,
-                        description=item.description,
+                        description=item.description if description_updated else None,
+                        due_date=(
+                            self._format_due_date(item.due) if due_updated else None
+                        ),
                     )
                     LOGGER.debug(
                         "Successfully moved issue %s to completed state "
-                        "with description update",
+                        "with field updates",
                         issue_id,
                     )
                 except Exception as e:
@@ -230,11 +286,14 @@ class LinearTodoListEntity(
                     await client.async_update_issue(
                         issue_id=issue_id,
                         state_id=state_id,
-                        description=item.description,
+                        description=item.description if description_updated else None,
+                        due_date=(
+                            self._format_due_date(item.due) if due_updated else None
+                        ),
                     )
                     LOGGER.debug(
                         "Successfully moved issue %s to todo state "
-                        "with description update",
+                        "with field updates",
                         issue_id,
                     )
                 except Exception as e:
@@ -243,12 +302,15 @@ class LinearTodoListEntity(
                     )
                     raise
         else:
-            # Update description and status separately
-            if description_updated:
+            # Update description/due and status separately
+            if fields_updated:
                 await client.async_update_issue(
                     issue_id=issue_id,
                     state_id=None,
-                    description=item.description,
+                    description=item.description if description_updated else None,
+                    due_date=(
+                        self._format_due_date(item.due) if due_updated else None
+                    ),
                 )
 
             if status_changed:

@@ -125,6 +125,7 @@ class IntegrationBlueprintApiClient:
                         id
                         title
                         description
+                        dueDate
                         state {
                             id
                             name
@@ -153,6 +154,7 @@ class IntegrationBlueprintApiClient:
                         id
                         title
                         description
+                        dueDate
                         state {
                             id
                             name
@@ -176,37 +178,53 @@ class IntegrationBlueprintApiClient:
         issue_id: str,
         state_id: str | None = None,
         description: str | None = None,
+        due_date: str | None = None,
     ) -> dict[str, Any]:
         """
-        Update an issue's state and/or description.
+        Update an issue's state, description, and/or due date.
 
         Args:
             issue_id: The ID of the issue to update
             state_id: The new state ID, or None to not update state
             description: The new description, or None to not update description
+            due_date: The new due date (ISO 8601 format), or None to not update
 
         """
-        # Build input object string with only provided fields
+        # Build input object string and variable declarations with only provided fields
         input_parts: list[str] = []
+        variable_declarations: list[str] = ["$issueId: String!"]
+        variables: dict[str, Any] = {
+            "issueId": issue_id,
+        }
 
         if state_id is not None:
             input_parts.append("stateId: $stateId")
+            variable_declarations.append("$stateId: String")
+            variables["stateId"] = state_id
 
         # Only include description if it's not None (None means don't update)
         if description is not None:
             input_parts.append("description: $description")
+            variable_declarations.append("$description: String")
+            variables["description"] = description
+
+        # Only include dueDate if it's not None (None means don't update)
+        # Linear expects TimelessDate, not DateTime
+        if due_date is not None:
+            input_parts.append("dueDate: $dueDate")
+            variable_declarations.append("$dueDate: TimelessDate")
+            variables["dueDate"] = due_date
 
         if not input_parts:
-            msg = "At least one of state_id or description must be provided"
+            msg = "At least one of state_id, description, or due_date must be provided"
             raise ValueError(msg)
 
         input_str = ",\n                    ".join(input_parts)
+        variable_decls_str = ",\n            ".join(variable_declarations)
 
         mutation = f"""
         mutation UpdateIssue(
-            $issueId: String!,
-            $stateId: String,
-            $description: String
+            {variable_decls_str}
         ) {{
             issueUpdate(
                 id: $issueId,
@@ -219,6 +237,7 @@ class IntegrationBlueprintApiClient:
                     id
                     title
                     description
+                    dueDate
                     state {{
                         id
                         name
@@ -228,13 +247,6 @@ class IntegrationBlueprintApiClient:
             }}
         }}
         """
-        variables: dict[str, Any] = {
-            "issueId": issue_id,
-        }
-        if state_id is not None:
-            variables["stateId"] = state_id
-        if description is not None:
-            variables["description"] = description
 
         result = await self._graphql_query(mutation, variables)
         issue_update = result.get("data", {}).get("issueUpdate", {})
@@ -249,45 +261,65 @@ class IntegrationBlueprintApiClient:
         team_id: str,
         state_id: str,
         description: str | None = None,
+        due_date: str | None = None,
     ) -> dict[str, Any]:
         """Create a new issue."""
-        mutation = """
-        mutation CreateIssue(
-            $title: String!,
-            $teamId: String!,
-            $stateId: String,
-            $description: String
-        ) {
-            issueCreate(
-                input: {
-                    title: $title
-                    teamId: $teamId
-                    stateId: $stateId
-                    description: $description
-                }
-            ) {
-                success
-                issue {
-                    id
-                    title
-                    description
-                    state {
-                        id
-                        name
-                    }
-                    updatedAt
-                    url
-                }
-            }
-        }
-        """
+        # Build variable declarations and input fields dynamically
+        variable_declarations: list[str] = [
+            "$title: String!",
+            "$teamId: String!",
+            "$stateId: String",
+        ]
+        input_fields: list[str] = [
+            "title: $title",
+            "teamId: $teamId",
+            "stateId: $stateId",
+        ]
         variables: dict[str, Any] = {
             "title": title,
             "teamId": team_id,
             "stateId": state_id,
         }
+
         if description:
+            variable_declarations.append("$description: String")
+            input_fields.append("description: $description")
             variables["description"] = description
+
+        if due_date:
+            # Linear expects TimelessDate, not DateTime
+            variable_declarations.append("$dueDate: TimelessDate")
+            input_fields.append("dueDate: $dueDate")
+            variables["dueDate"] = due_date
+
+        variable_decls_str = ",\n            ".join(variable_declarations)
+        input_fields_str = ",\n                    ".join(input_fields)
+
+        mutation = f"""
+        mutation CreateIssue(
+            {variable_decls_str}
+        ) {{
+            issueCreate(
+                input: {{
+                    {input_fields_str}
+                }}
+            ) {{
+                success
+                issue {{
+                    id
+                    title
+                    description
+                    dueDate
+                    state {{
+                        id
+                        name
+                    }}
+                    updatedAt
+                    url
+                }}
+            }}
+        }}
+        """
 
         result = await self._graphql_query(mutation, variables)
         issue_create = result.get("data", {}).get("issueCreate", {})
