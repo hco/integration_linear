@@ -259,20 +259,25 @@ class IntegrationBlueprintApiClient:
                     headers=headers,
                     json=data,
                 )
-                
+
                 # Read response body before checking status
                 result = await response.json()
-                
+
                 # Check for HTTP errors
                 if response.status in (401, 403):
                     msg = "Invalid API token"
                     raise IntegrationBlueprintApiClientAuthenticationError(msg)
-                
+
                 if response.status >= 400:
                     # Check for GraphQL errors in response
                     if "errors" in result:
-                        error_messages = [err.get("message", "Unknown error") for err in result["errors"]]
-                        if response.status in (401, 403) or any("unauthorized" in msg.lower() for msg in error_messages):
+                        error_messages = [
+                            err.get("message", "Unknown error")
+                            for err in result["errors"]
+                        ]
+                        if response.status in (401, 403) or any(
+                            "unauthorized" in msg.lower() for msg in error_messages
+                        ):
                             raise IntegrationBlueprintApiClientAuthenticationError(
                                 "Invalid API token"
                             )
@@ -280,18 +285,23 @@ class IntegrationBlueprintApiClient:
                             f"GraphQL errors: {', '.join(error_messages)}"
                         )
                     response.raise_for_status()
-                
+
                 # Check for GraphQL errors in successful response
                 if "errors" in result:
-                    error_messages = [err.get("message", "Unknown error") for err in result["errors"]]
-                    if any("401" in msg or "403" in msg or "unauthorized" in msg.lower() for msg in error_messages):
+                    error_messages = [
+                        err.get("message", "Unknown error") for err in result["errors"]
+                    ]
+                    if any(
+                        "401" in msg or "403" in msg or "unauthorized" in msg.lower()
+                        for msg in error_messages
+                    ):
                         raise IntegrationBlueprintApiClientAuthenticationError(
                             "Invalid API token"
                         )
                     raise IntegrationBlueprintApiClientError(
                         f"GraphQL errors: {', '.join(error_messages)}"
                     )
-                
+
                 return result
 
         except TimeoutError as exception:

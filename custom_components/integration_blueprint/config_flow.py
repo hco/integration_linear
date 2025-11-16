@@ -239,10 +239,7 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 defaults["removed_state"] = state_id
 
             # Match "Todo" or "To Do" for todo states
-            if (
-                state_name in ["todo", "to do"]
-                and "todo_states" not in defaults
-            ):
+            if state_name in ["todo", "to do"] and "todo_states" not in defaults:
                 defaults["todo_states"] = [state_id]
 
         return defaults
@@ -510,10 +507,7 @@ class LinearOptionsFlowHandler(config_entries.OptionsFlow):
                 defaults["removed_state"] = state_id
 
             # Match "Todo" or "To Do" for todo states
-            if (
-                state_name in ["todo", "to do"]
-                and "todo_states" not in defaults
-            ):
+            if state_name in ["todo", "to do"] and "todo_states" not in defaults:
                 defaults["todo_states"] = [state_id]
 
         return defaults

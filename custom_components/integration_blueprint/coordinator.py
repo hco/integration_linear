@@ -30,23 +30,25 @@ class BlueprintDataUpdateCoordinator(DataUpdateCoordinator):
             client = self.config_entry.runtime_data.client
             teams = self.config_entry.data.get(CONF_TEAMS, [])
             team_states = self.config_entry.data.get(CONF_TEAM_STATES, {})
-            
+
             result: dict[str, dict[str, list[dict[str, Any]]]] = {}
-            
+
             # Calculate cutoff date for completed issues (7 days ago)
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=COMPLETED_LOOKBACK_DAYS)
+            cutoff_date = datetime.now(timezone.utc) - timedelta(
+                days=COMPLETED_LOOKBACK_DAYS
+            )
             updated_since = cutoff_date.isoformat()
-            
+
             for team_id in teams:
                 team_config = team_states.get(team_id, {})
                 todo_states = team_config.get("todo_states", [])
                 completed_state = team_config.get("completed_state")
-                
+
                 team_data: dict[str, list[dict[str, Any]]] = {
                     "todo": [],
                     "completed": [],
                 }
-                
+
                 # Fetch issues in todo_states (no date filter)
                 if todo_states:
                     try:
@@ -61,7 +63,7 @@ class BlueprintDataUpdateCoordinator(DataUpdateCoordinator):
                             team_id,
                             exception,
                         )
-                
+
                 # Fetch issues in completed_state (filter: updated in last 7 days)
                 if completed_state:
                     try:
@@ -77,9 +79,9 @@ class BlueprintDataUpdateCoordinator(DataUpdateCoordinator):
                             team_id,
                             exception,
                         )
-                
+
                 result[team_id] = team_data
-            
+
             return result
         except IntegrationBlueprintApiClientAuthenticationError as exception:
             raise ConfigEntryAuthFailed(exception) from exception
