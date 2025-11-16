@@ -59,7 +59,9 @@ class LinearTodoListEntity(
     _attr_attribution = ATTRIBUTION
     # Enable support for creating, updating, and deleting todo items
     _attr_supported_features = (
-        TodoListEntityFeature.CREATE_TODO_ITEM | TodoListEntityFeature.UPDATE_TODO_ITEM
+        TodoListEntityFeature.CREATE_TODO_ITEM
+        | TodoListEntityFeature.UPDATE_TODO_ITEM
+        | TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
         # disabled because the UX was not as I expected
         # | TodoListEntityFeature.DELETE_TODO_ITEM
     )
@@ -95,6 +97,7 @@ class LinearTodoListEntity(
                 uid=issue["id"],
                 summary=issue.get("title", ""),
                 status=TodoItemStatus.NEEDS_ACTION,
+                description=issue.get("description"),
             )
             for issue in todo_issues
         ]
@@ -105,6 +108,7 @@ class LinearTodoListEntity(
                 uid=issue["id"],
                 summary=issue.get("title", ""),
                 status=TodoItemStatus.COMPLETED,
+                description=issue.get("description"),
             )
             for issue in completed_issues
         )
@@ -129,7 +133,7 @@ class LinearTodoListEntity(
             title=item.summary or "",
             team_id=self._team_id,
             state_id=state_id,
-            description=None,
+            description=item.description,
         )
 
         # Refresh coordinator to sync UI
@@ -146,6 +150,13 @@ class LinearTodoListEntity(
         completed_state = team_config.get("completed_state")
 
         issue_id = item.uid
+        # Check if description needs to be updated before modifying update_fields
+        # If update_fields is None, it means all fields are being updated
+        # If "description" is in update_fields, it's explicitly being updated
+        description_updated = (
+            update_fields is None or "description" in (update_fields or {})
+        )
+
         # Handle case where update_fields might be None or empty
         if update_fields is None:
             update_fields = {}
@@ -157,52 +168,138 @@ class LinearTodoListEntity(
             new_status = item.status
 
         LOGGER.debug(
-            "Updating todo item %s: new_status=%s, update_fields=%s",
+            "Updating todo item %s: new_status=%s, update_fields=%s, "
+            "description_updated=%s",
             issue_id,
             new_status,
             update_fields,
+            description_updated,
         )
 
-        if new_status == TodoItemStatus.COMPLETED:
-            # Move issue to completed_state
-            if not completed_state:
-                error_msg = (
-                    f"No completed state configured for team {self._team_name} "
-                    f"({self._team_id})"
-                )
-                LOGGER.error(error_msg)
-                raise ValueError(error_msg)
-            try:
-                await client.async_update_issue(issue_id, completed_state)
-                LOGGER.debug("Successfully moved issue %s to completed state", issue_id)
-            except Exception as e:
-                LOGGER.error(
-                    "Failed to update issue %s to completed state: %s", issue_id, e
-                )
-                raise
-        elif new_status == TodoItemStatus.NEEDS_ACTION:
-            # Move issue back to first todo_state
-            if not todo_states:
-                error_msg = (
-                    f"No todo states configured for team {self._team_name} "
-                    f"({self._team_id})"
-                )
-                LOGGER.error(error_msg)
-                raise ValueError(error_msg)
-            state_id = todo_states[0]
-            try:
-                await client.async_update_issue(issue_id, state_id)
-                LOGGER.debug("Successfully moved issue %s to todo state", issue_id)
-            except Exception as e:
-                LOGGER.error("Failed to update issue %s to todo state: %s", issue_id, e)
-                raise
-        else:
+        # Determine if we need to update status
+        # Only COMPLETED and NEEDS_ACTION are handled
+        status_changed = new_status in (
+            TodoItemStatus.COMPLETED,
+            TodoItemStatus.NEEDS_ACTION,
+        )
+
+        if new_status is not None and not status_changed:
             LOGGER.warning(
                 "Unknown status update for issue %s: %s (update_fields: %s)",
                 issue_id,
                 new_status,
                 update_fields,
             )
+
+        # If both description and status need updating, do it in one call
+        if description_updated and status_changed:
+            if new_status == TodoItemStatus.COMPLETED:
+                if not completed_state:
+                    error_msg = (
+                        f"No completed state configured for team {self._team_name} "
+                        f"({self._team_id})"
+                    )
+                    LOGGER.error(error_msg)
+                    raise ValueError(error_msg)
+                try:
+                    await client.async_update_issue(
+                        issue_id=issue_id,
+                        state_id=completed_state,
+                        description=item.description,
+                    )
+                    LOGGER.debug(
+                        "Successfully moved issue %s to completed state "
+                        "with description update",
+                        issue_id,
+                    )
+                except Exception as e:
+                    LOGGER.error(
+                        "Failed to update issue %s to completed state: %s", issue_id, e
+                    )
+                    raise
+            elif new_status == TodoItemStatus.NEEDS_ACTION:
+                if not todo_states:
+                    error_msg = (
+                        f"No todo states configured for team {self._team_name} "
+                        f"({self._team_id})"
+                    )
+                    LOGGER.error(error_msg)
+                    raise ValueError(error_msg)
+                state_id = todo_states[0]
+                try:
+                    await client.async_update_issue(
+                        issue_id=issue_id,
+                        state_id=state_id,
+                        description=item.description,
+                    )
+                    LOGGER.debug(
+                        "Successfully moved issue %s to todo state "
+                        "with description update",
+                        issue_id,
+                    )
+                except Exception as e:
+                    LOGGER.error(
+                        "Failed to update issue %s to todo state: %s", issue_id, e
+                    )
+                    raise
+        else:
+            # Update description and status separately
+            if description_updated:
+                await client.async_update_issue(
+                    issue_id=issue_id,
+                    state_id=None,
+                    description=item.description,
+                )
+
+            if status_changed:
+                if new_status == TodoItemStatus.COMPLETED:
+                    # Move issue to completed_state
+                    if not completed_state:
+                        error_msg = (
+                            f"No completed state configured for team {self._team_name} "
+                            f"({self._team_id})"
+                        )
+                        LOGGER.error(error_msg)
+                        raise ValueError(error_msg)
+                    try:
+                        await client.async_update_issue(
+                            issue_id=issue_id,
+                            state_id=completed_state,
+                        )
+                        LOGGER.debug(
+                            "Successfully moved issue %s to completed state",
+                            issue_id,
+                        )
+                    except Exception as e:
+                        LOGGER.error(
+                            "Failed to update issue %s to completed state: %s",
+                            issue_id,
+                            e,
+                        )
+                        raise
+                elif new_status == TodoItemStatus.NEEDS_ACTION:
+                    # Move issue back to first todo_state
+                    if not todo_states:
+                        error_msg = (
+                            f"No todo states configured for team {self._team_name} "
+                            f"({self._team_id})"
+                        )
+                        LOGGER.error(error_msg)
+                        raise ValueError(error_msg)
+                    state_id = todo_states[0]
+                    try:
+                        await client.async_update_issue(
+                            issue_id=issue_id,
+                            state_id=state_id,
+                        )
+                        LOGGER.debug(
+                            "Successfully moved issue %s to todo state", issue_id
+                        )
+                    except Exception as e:
+                        LOGGER.error(
+                            "Failed to update issue %s to todo state: %s", issue_id, e
+                        )
+                        raise
 
         # Refresh coordinator to sync UI
         await self.coordinator.async_request_refresh()
@@ -220,7 +317,10 @@ class LinearTodoListEntity(
 
         # Move each issue to removed_state
         for issue_id in uids:
-            await client.async_update_issue(issue_id, removed_state)
+            await client.async_update_issue(
+                issue_id=issue_id,
+                state_id=removed_state,
+            )
 
         # Refresh coordinator to sync UI
         await self.coordinator.async_request_refresh()

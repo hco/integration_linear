@@ -174,29 +174,68 @@ class IntegrationBlueprintApiClient:
     async def async_update_issue(
         self,
         issue_id: str,
-        state_id: str,
+        state_id: str | None = None,
+        description: str | None = None,
     ) -> dict[str, Any]:
-        """Update an issue's state."""
-        mutation = """
-        mutation UpdateIssue($issueId: String!, $stateId: String) {
-            issueUpdate(id: $issueId, input: { stateId: $stateId }) {
+        """
+        Update an issue's state and/or description.
+
+        Args:
+            issue_id: The ID of the issue to update
+            state_id: The new state ID, or None to not update state
+            description: The new description, or None to not update description
+
+        """
+        # Build input object string with only provided fields
+        input_parts: list[str] = []
+
+        if state_id is not None:
+            input_parts.append("stateId: $stateId")
+
+        # Only include description if it's not None (None means don't update)
+        if description is not None:
+            input_parts.append("description: $description")
+
+        if not input_parts:
+            msg = "At least one of state_id or description must be provided"
+            raise ValueError(msg)
+
+        input_str = ",\n                    ".join(input_parts)
+
+        mutation = f"""
+        mutation UpdateIssue(
+            $issueId: String!,
+            $stateId: String,
+            $description: String
+        ) {{
+            issueUpdate(
+                id: $issueId,
+                input: {{
+                    {input_str}
+                }}
+            ) {{
                 success
-                issue {
+                issue {{
                     id
                     title
-                    state {
+                    description
+                    state {{
                         id
                         name
-                    }
+                    }}
                     updatedAt
-                }
-            }
-        }
+                }}
+            }}
+        }}
         """
-        variables = {
+        variables: dict[str, Any] = {
             "issueId": issue_id,
-            "stateId": state_id,
         }
+        if state_id is not None:
+            variables["stateId"] = state_id
+        if description is not None:
+            variables["description"] = description
+
         result = await self._graphql_query(mutation, variables)
         issue_update = result.get("data", {}).get("issueUpdate", {})
         if not issue_update.get("success"):
