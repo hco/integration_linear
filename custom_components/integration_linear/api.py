@@ -9,6 +9,9 @@ import aiohttp
 import async_timeout
 
 LINEAR_GRAPHQL_ENDPOINT = "https://api.linear.app/graphql"
+HTTP_STATUS_BAD_REQUEST = 400
+HTTP_STATUS_UNAUTHORIZED = 401
+HTTP_STATUS_FORBIDDEN = 403
 
 
 class IntegrationBlueprintApiClientError(Exception):
@@ -29,12 +32,24 @@ class IntegrationBlueprintApiClientAuthenticationError(
 
 def _verify_response_or_raise(response: aiohttp.ClientResponse) -> None:
     """Verify that the response is valid."""
-    if response.status in (401, 403):
+    if response.status in (HTTP_STATUS_UNAUTHORIZED, HTTP_STATUS_FORBIDDEN):
         msg = "Invalid API token"
         raise IntegrationBlueprintApiClientAuthenticationError(
             msg,
         )
     response.raise_for_status()
+
+
+def _raise_authentication_error() -> None:
+    """Raise authentication error."""
+    msg = "Invalid API token"
+    raise IntegrationBlueprintApiClientAuthenticationError(msg)
+
+
+def _raise_graphql_error(error_messages: list[str]) -> None:
+    """Raise GraphQL error."""
+    error_msg = f"GraphQL errors: {', '.join(error_messages)}"
+    raise IntegrationBlueprintApiClientError(error_msg)
 
 
 class IntegrationBlueprintApiClient:
@@ -94,7 +109,11 @@ class IntegrationBlueprintApiClient:
         # Build filter conditionally based on whether updated_since is provided
         if updated_since:
             query = """
-            query GetIssues($teamId: ID!, $stateIds: [ID!]!, $updatedSince: DateTimeOrDuration!) {
+            query GetIssues(
+                $teamId: ID!,
+                $stateIds: [ID!]!,
+                $updatedSince: DateTimeOrDuration!
+            ) {
                 issues(
                     filter: {
                         team: { id: { eq: $teamId } }
@@ -181,7 +200,8 @@ class IntegrationBlueprintApiClient:
         result = await self._graphql_query(mutation, variables)
         issue_update = result.get("data", {}).get("issueUpdate", {})
         if not issue_update.get("success"):
-            raise IntegrationBlueprintApiClientError("Failed to update issue")
+            msg = "Failed to update issue"
+            raise IntegrationBlueprintApiClientError(msg)
         return issue_update.get("issue", {})
 
     async def async_create_issue(
@@ -193,7 +213,12 @@ class IntegrationBlueprintApiClient:
     ) -> dict[str, Any]:
         """Create a new issue."""
         mutation = """
-        mutation CreateIssue($title: String!, $teamId: String!, $stateId: String, $description: String) {
+        mutation CreateIssue(
+            $title: String!,
+            $teamId: String!,
+            $stateId: String,
+            $description: String
+        ) {
             issueCreate(
                 input: {
                     title: $title
@@ -228,7 +253,8 @@ class IntegrationBlueprintApiClient:
         result = await self._graphql_query(mutation, variables)
         issue_create = result.get("data", {}).get("issueCreate", {})
         if not issue_create.get("success"):
-            raise IntegrationBlueprintApiClientError("Failed to create issue")
+            msg = "Failed to create issue"
+            raise IntegrationBlueprintApiClientError(msg)
         return issue_create.get("issue", {})
 
     async def _graphql_query(self, query: str, variables: dict | None = None) -> Any:
@@ -264,26 +290,24 @@ class IntegrationBlueprintApiClient:
                 result = await response.json()
 
                 # Check for HTTP errors
-                if response.status in (401, 403):
-                    msg = "Invalid API token"
-                    raise IntegrationBlueprintApiClientAuthenticationError(msg)
+                if response.status in (HTTP_STATUS_UNAUTHORIZED, HTTP_STATUS_FORBIDDEN):
+                    _raise_authentication_error()
 
-                if response.status >= 400:
+                if response.status >= HTTP_STATUS_BAD_REQUEST:
                     # Check for GraphQL errors in response
                     if "errors" in result:
                         error_messages = [
                             err.get("message", "Unknown error")
                             for err in result["errors"]
                         ]
-                        if response.status in (401, 403) or any(
+                        if response.status in (
+                            HTTP_STATUS_UNAUTHORIZED,
+                            HTTP_STATUS_FORBIDDEN,
+                        ) or any(
                             "unauthorized" in msg.lower() for msg in error_messages
                         ):
-                            raise IntegrationBlueprintApiClientAuthenticationError(
-                                "Invalid API token"
-                            )
-                        raise IntegrationBlueprintApiClientError(
-                            f"GraphQL errors: {', '.join(error_messages)}"
-                        )
+                            _raise_authentication_error()
+                        _raise_graphql_error(error_messages)
                     response.raise_for_status()
 
                 # Check for GraphQL errors in successful response
@@ -295,12 +319,8 @@ class IntegrationBlueprintApiClient:
                         "401" in msg or "403" in msg or "unauthorized" in msg.lower()
                         for msg in error_messages
                     ):
-                        raise IntegrationBlueprintApiClientAuthenticationError(
-                            "Invalid API token"
-                        )
-                    raise IntegrationBlueprintApiClientError(
-                        f"GraphQL errors: {', '.join(error_messages)}"
-                    )
+                        _raise_authentication_error()
+                    _raise_graphql_error(error_messages)
 
                 return result
 
