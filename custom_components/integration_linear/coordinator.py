@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -12,7 +12,7 @@ from .api import (
     IntegrationBlueprintApiClientAuthenticationError,
     IntegrationBlueprintApiClientError,
 )
-from .const import COMPLETED_LOOKBACK_DAYS, CONF_TEAMS, CONF_TEAM_STATES, LOGGER
+from .const import COMPLETED_LOOKBACK_DAYS, CONF_TEAM_STATES, CONF_TEAMS, LOGGER
 
 if TYPE_CHECKING:
     from .data import IntegrationBlueprintConfigEntry
@@ -34,7 +34,7 @@ class BlueprintDataUpdateCoordinator(DataUpdateCoordinator):
             result: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
             # Calculate cutoff date for completed issues (7 days ago)
-            cutoff_date = datetime.now(timezone.utc) - timedelta(
+            cutoff_date = datetime.now(UTC) - timedelta(
                 days=COMPLETED_LOOKBACK_DAYS
             )
             updated_since = cutoff_date.isoformat()
@@ -81,9 +81,9 @@ class BlueprintDataUpdateCoordinator(DataUpdateCoordinator):
                         )
 
                 result[team_id] = team_data
-
-            return result
         except IntegrationBlueprintApiClientAuthenticationError as exception:
             raise ConfigEntryAuthFailed(exception) from exception
         except IntegrationBlueprintApiClientError as exception:
             raise UpdateFailed(exception) from exception
+        else:
+            return result
