@@ -1,10 +1,10 @@
 {
   "domain": "integration_linear",
   "name": "Linear Integration",
-  "codeowners": ["@ludeeus"],
+  "codeowners": ["@hco"],
   "config_flow": true,
-  "documentation": "https://github.com/ludeeus/integration_linear",
+  "documentation": "https://github.com/hco/integration_linear",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/ludeeus/integration_linear/issues",
+  "issue_tracker": "https://github.com/hco/integration_linear/issues",
   "version": "0.1.0"
 }
