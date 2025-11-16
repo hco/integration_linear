@@ -10,6 +10,7 @@ _.python.venv = { path = ".venv", create = true, uv_create_args = ['--seed'] }
 [tasks.setup]
 description = "Install Python dependencies from requirements.txt"
 run = "bash scripts/setup"
+sources = [".python-version", "requirements.txt", "scripts/setup"]
 
 [tasks.lint]
 description = "Format and lint code with ruff"
@@ -28,6 +29,7 @@ ruff check .
 [tasks.develop]
 description = "Start Home Assistant in development mode"
 run = "bash scripts/develop"
+depends = "setup"
 
 [tasks.format]
 description = "Format code with ruff"
