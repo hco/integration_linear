@@ -3,7 +3,7 @@ name: Validate
 on:
   workflow_dispatch:
   schedule:
-    - cron:  "0 0 * * *"
+    - cron: "0 0 * * *"
   push:
     branches:
       - main
@@ -11,7 +11,7 @@ on:
     branches:
       - main
 
-permissions: {}
+# permissions: {}
 
 jobs:
   hassfest: # https://developers.home-assistant.io/blog/2020/04/16/hassfest
