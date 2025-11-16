@@ -216,6 +216,37 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         # Build initial form for current team
         return await self._build_team_states_form(_errors)
 
+    def _find_default_states(
+        self,
+        states: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Find default states based on common names."""
+        defaults = {}
+
+        for state in states:
+            state_name = state.get("name", "").lower()
+            state_id = state["id"]
+
+            # Match "Done" for completed state
+            if state_name == "done" and "completed_state" not in defaults:
+                defaults["completed_state"] = state_id
+
+            # Match "Cancelled" or "Canceled" for removed state
+            if (
+                state_name in ["cancelled", "canceled"]
+                and "removed_state" not in defaults
+            ):
+                defaults["removed_state"] = state_id
+
+            # Match "Todo" or "To Do" for todo states
+            if (
+                state_name in ["todo", "to do"]
+                and "todo_states" not in defaults
+            ):
+                defaults["todo_states"] = [state_id]
+
+        return defaults
+
     async def _build_team_states_form(
         self,
         errors: dict[str, str],
@@ -234,6 +265,10 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get existing configuration if editing
         existing_config = self._team_states_config.get(current_team_id, {})
+
+        # If no existing configuration, try to find defaults
+        if not existing_config:
+            existing_config = self._find_default_states(states)
 
         # Use static keys that can be translated
         schema_dict = {
@@ -452,6 +487,37 @@ class LinearOptionsFlowHandler(config_entries.OptionsFlow):
         # Build initial form for current team
         return await self._build_options_team_states_form(_errors)
 
+    def _find_default_states(
+        self,
+        states: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Find default states based on common names."""
+        defaults = {}
+
+        for state in states:
+            state_name = state.get("name", "").lower()
+            state_id = state["id"]
+
+            # Match "Done" for completed state
+            if state_name == "done" and "completed_state" not in defaults:
+                defaults["completed_state"] = state_id
+
+            # Match "Cancelled" or "Canceled" for removed state
+            if (
+                state_name in ["cancelled", "canceled"]
+                and "removed_state" not in defaults
+            ):
+                defaults["removed_state"] = state_id
+
+            # Match "Todo" or "To Do" for todo states
+            if (
+                state_name in ["todo", "to do"]
+                and "todo_states" not in defaults
+            ):
+                defaults["todo_states"] = [state_id]
+
+        return defaults
+
     async def _build_options_team_states_form(
         self,
         errors: dict[str, str],
@@ -470,6 +536,10 @@ class LinearOptionsFlowHandler(config_entries.OptionsFlow):
 
         # Get existing configuration for current team
         existing_config = self._team_states_config.get(current_team_id, {})
+
+        # If no existing configuration, try to find defaults
+        if not existing_config:
+            existing_config = self._find_default_states(states)
 
         # Use static keys that can be translated
         schema_dict = {
