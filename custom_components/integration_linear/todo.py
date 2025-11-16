@@ -12,6 +12,7 @@ from homeassistant.components.todo import (
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import IntegrationBlueprintApiClientError
 from .const import ATTRIBUTION, CONF_TEAM_STATES, CONF_TEAMS, LOGGER
 from .coordinator import BlueprintDataUpdateCoordinator
 
@@ -35,7 +36,7 @@ async def async_setup_entry(
     try:
         all_teams = await client.async_get_teams()
         team_map = {team["id"]: team["name"] for team in all_teams}
-    except Exception:  # pylint: disable=broad-except
+    except IntegrationBlueprintApiClientError:
         # If we can't fetch teams, use IDs as names
         team_map = {team_id: team_id for team_id in selected_teams}
 
@@ -88,27 +89,25 @@ class LinearTodoListEntity(
         todo_issues = team_data.get("todo", [])
         completed_issues = team_data.get("completed", [])
 
-        items: list[TodoItem] = []
-
         # Map todo_states issues to TodoItems with NEEDS_ACTION status
-        for issue in todo_issues:
-            items.append(
-                TodoItem(
-                    uid=issue["id"],
-                    summary=issue.get("title", ""),
-                    status=TodoItemStatus.NEEDS_ACTION,
-                )
+        items: list[TodoItem] = [
+            TodoItem(
+                uid=issue["id"],
+                summary=issue.get("title", ""),
+                status=TodoItemStatus.NEEDS_ACTION,
             )
+            for issue in todo_issues
+        ]
 
         # Map completed_state issues to TodoItems with COMPLETED status
-        for issue in completed_issues:
-            items.append(
-                TodoItem(
-                    uid=issue["id"],
-                    summary=issue.get("title", ""),
-                    status=TodoItemStatus.COMPLETED,
-                )
+        items.extend(
+            TodoItem(
+                uid=issue["id"],
+                summary=issue.get("title", ""),
+                status=TodoItemStatus.COMPLETED,
             )
+            for issue in completed_issues
+        )
 
         return items
 
@@ -167,7 +166,10 @@ class LinearTodoListEntity(
         if new_status == TodoItemStatus.COMPLETED:
             # Move issue to completed_state
             if not completed_state:
-                error_msg = f"No completed state configured for team {self._team_name} ({self._team_id})"
+                error_msg = (
+                    f"No completed state configured for team {self._team_name} "
+                    f"({self._team_id})"
+                )
                 LOGGER.error(error_msg)
                 raise ValueError(error_msg)
             try:
@@ -181,7 +183,10 @@ class LinearTodoListEntity(
         elif new_status == TodoItemStatus.NEEDS_ACTION:
             # Move issue back to first todo_state
             if not todo_states:
-                error_msg = f"No todo states configured for team {self._team_name} ({self._team_id})"
+                error_msg = (
+                    f"No todo states configured for team {self._team_name} "
+                    f"({self._team_id})"
+                )
                 LOGGER.error(error_msg)
                 raise ValueError(error_msg)
             state_id = todo_states[0]
