@@ -4,7 +4,7 @@
 # https://www.home-assistant.io/integrations/homeassistant/
 homeassistant:
   debug: true
-# discovery: ~
+
 # https://www.home-assistant.io/integrations/logger/
 logger:
   default: info
