@@ -176,12 +176,44 @@ class LinearTodoListEntity(
         # Use the first todo_state for new issues
         state_id = todo_states[0]
 
+        # Get the current user from Home Assistant
+        created_by_user = None
+        if self.hass.auth and hasattr(self, "_context") and self._context:
+            user_id = self._context.user_id
+            if user_id:
+                user = await self.hass.auth.async_get_user(user_id)
+                if user:
+                    created_by_user = user
+
+        created_by_person = None
+        if created_by_user:
+            all_persons = self.hass.states.async_all("person")
+
+            for person in all_persons:
+                if person.attributes.get("user_id") == created_by_user.id:
+                    created_by_person = person
+                    break
+            LOGGER.debug("Created by person: %s", created_by_person)
+
+        # Get avatar URL with public base URL if available
+        avatar_url = None
+        if (
+            created_by_person
+            and (entity_picture := created_by_person.attributes.get("entity_picture"))
+            and self.hass.config.external_url
+        ):
+            avatar_url = f"{self.hass.config.external_url}{entity_picture}"
+
+            LOGGER.debug("Avatar URL: %s", avatar_url)
+
         await client.async_create_issue(
             title=item.summary or "",
             team_id=self._team_id,
             state_id=state_id,
             description=item.description,
             due_date=self._format_due_date(item.due),
+            created_by_user=created_by_user.name,
+            created_by_user_avatar_url=avatar_url,
         )
 
         # Refresh coordinator to sync UI
