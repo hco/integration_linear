@@ -65,6 +65,7 @@ class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
     def extra_authorize_data(self) -> dict[str, Any]:
         """Extra data that needs to be appended to the authorize url."""
         return {
+            "actor": "app",
             "scope": " ".join(OAUTH_SCOPES),
             "prompt": "consent",
         }
