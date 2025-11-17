@@ -20,7 +20,7 @@ This integration is not yet available in the HACS default store, but you can ins
 
 ### Prerequisites
 
-- Home Assistant 2025.2.4 or later
+- Home Assistant 2025.11 or later
 - [HACS](https://hacs.xyz/) installed and configured
 
 ### Installing via HACS (Custom Repository)
