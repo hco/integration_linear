@@ -2,6 +2,14 @@
   "config": {
     "step": {
       "user": {
+        "title": "Linear Integration",
+        "description": "Choose your authentication method",
+        "data": {
+          "auth_method": "Authentication Method"
+        }
+      },
+      "api_key": {
+        "title": "Linear API Key",
         "description": "Enter your Linear API token. You can create one at https://linear.app/settings/account/security/api-keys/new",
         "data": {
           "api_token": "API Token"
@@ -34,7 +42,9 @@
       "required": "This field is required."
     },
     "abort": {
-      "already_configured": "This entry is already configured."
+      "already_configured": "This entry is already configured.",
+      "oauth_implementation_not_available": "OAuth implementation not available.",
+      "oauth_fetch_teams_failed": "Failed to fetch teams after OAuth authentication."
     }
   },
   "options": {
@@ -69,5 +79,8 @@
       "fetch_states_failed": "Failed to fetch workflow states from Linear.",
       "required": "This field is required."
     }
+  },
+  "application_credentials": {
+    "description": "Navigate to the [Linear API settings]({console_url}) to create OAuth credentials. Enter your client secret below."
   }
 }

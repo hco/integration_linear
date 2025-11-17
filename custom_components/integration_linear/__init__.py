@@ -160,6 +160,16 @@ async def async_setup_entry(
     if hasattr(entry, "runtime_data") and entry.runtime_data is not None:
         await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
+    # Get API token - either from OAuth or from config entry data
+    api_token: str
+    if CONF_API_TOKEN in entry.data:
+        # API key authentication
+        api_token = entry.data[CONF_API_TOKEN]
+    else:
+        # OAuth authentication - token is stored in entry.data
+        token = entry.data.get("token", {})
+        api_token = token.get("access_token", "")
+
     coordinator = BlueprintDataUpdateCoordinator(
         hass=hass,
         logger=LOGGER,
@@ -168,7 +178,7 @@ async def async_setup_entry(
     )
     entry.runtime_data = IntegrationBlueprintData(
         client=IntegrationBlueprintApiClient(
-            api_token=entry.data[CONF_API_TOKEN],
+            api_token=api_token,
             session=async_get_clientsession(hass),
         ),
         integration=async_get_loaded_integration(hass, entry.domain),
