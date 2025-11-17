@@ -86,7 +86,7 @@ async def _async_handle_create_issue(
         raise ValueError(msg)
 
     client = config_entry.runtime_data.client
-    LOGGER.info("Fetching Team ID")
+    LOGGER.debug("Fetching Team ID")
     # If team_identifier is provided, look up the team
     if team_identifier:
         team = await client.async_get_team_by_identifier(team_identifier)
