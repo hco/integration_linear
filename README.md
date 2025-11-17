@@ -98,6 +98,39 @@ You can create new Linear issues directly from Home Assistant:
 - **Change Due Date**: Update the due date, and it will sync to Linear
 - **Reopen**: Uncheck a completed issue to move it back to the first "todo state"
 
+### Creating Issues with Advanced Features
+
+The integration provides a custom service `integration_linear.create_issue` that offers more features than the standard todo creation:
+
+```yaml
+service: integration_linear.create_issue
+data:
+  team_identifier: "ENG" # Team identifier (e.g., "ENG", "DESIGN") - easier than team_id
+  title: "Fix critical bug"
+  description: "This is a critical bug that needs immediate attention"
+  assignee_email: "user@example.com" # Assigns to user with this email (must exist)
+  label_names: # Adds labels by name (must exist)
+    - "bug"
+    - "critical"
+  state_name_or_id: "In Progress" # Sets status by name or ID
+  due_date: "2025-12-31" # Optional due date (YYYY-MM-DD format)
+```
+
+**Service Parameters:**
+
+- `team_id` or `team_identifier` (one required):
+  - `team_id`: The Linear team ID (UUID) where the issue will be created
+  - `team_identifier`: The team identifier/prefix (e.g., "ENG", "DESIGN") - much easier to use!
+- `title` (required): The issue title
+- `assignee_email` (optional): Email address of the user to assign. If the user doesn't exist, the service will throw an error.
+- `label_names` (optional): List of label names to add to the issue. All labels must exist for the team, otherwise an error is thrown.
+- `state_name_or_id` (optional): The workflow state name or ID to set. If the state doesn't exist, an error is thrown.
+- `description` (optional): Issue description
+- `due_date` (optional): Due date in YYYY-MM-DD format
+- `entry_id` (optional): Config entry ID if you have multiple Linear integrations configured
+
+**Note:** You can use either `team_id` or `team_identifier`, but not both. The `team_identifier` is the team's issue prefix (like "ENG" for Engineering), which is much easier to remember than a UUID.
+
 ### Automations
 
 You can use the todo entities in automations:
@@ -113,6 +146,23 @@ automation:
       - service: notify.mobile_app
         data:
           message: "Linear issue completed!"
+
+  - alias: "Create Linear issue from sensor"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.temperature
+        above: 30
+    action:
+      - service: integration_linear.create_issue
+        data:
+          team_identifier: "ENG" # Use team identifier instead of team_id
+          title: "Temperature too high"
+          description: "Temperature sensor {{ states('sensor.temperature') }}°C exceeded threshold"
+          assignee_email: "admin@example.com"
+          label_names:
+            - "alert"
+            - "temperature"
+          state_name_or_id: "Todo"
 ```
 
 ## Troubleshooting
