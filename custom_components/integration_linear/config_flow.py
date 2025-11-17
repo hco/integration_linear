@@ -29,7 +29,7 @@ LINEAR_CLIENT_ID = "c7e22e8ffc50ea46f48e3cfb8fe40175"
 LINEAR_AUTHORIZE_URL = "https://linear.app/oauth/authorize"
 LINEAR_TOKEN_URL = "https://api.linear.app/oauth/token"  # noqa: S105
 
-
+OAUTH_SCOPES = ["write"]
 class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
     """Config flow for Linear Integration."""
 
@@ -59,6 +59,15 @@ class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
     ) -> config_entries.OptionsFlow:
         """Return the options flow handler."""
         return LinearOptionsFlowHandler(config_entry)
+
+
+    @property
+    def extra_authorize_data(self) -> dict[str, Any]:
+        """Extra data that needs to be appended to the authorize url."""
+        return {
+            "scope": " ".join(OAUTH_SCOPES),
+            "prompt": "consent",
+        }
 
     async def async_step_pick_implementation(
         self, user_input: dict | None = None  # noqa: ARG002
