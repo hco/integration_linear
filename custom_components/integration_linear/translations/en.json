@@ -43,7 +43,6 @@
     },
     "abort": {
       "already_configured": "This entry is already configured.",
-      "oauth_implementation_not_available": "OAuth implementation not available.",
       "oauth_fetch_teams_failed": "Failed to fetch teams after OAuth authentication."
     }
   },
