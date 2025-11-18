@@ -162,8 +162,6 @@ class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         # Store teams temporarily and proceed to team selection
         self._teams = teams
         self._api_token = access_token
-        self._oauth_token = access_token
-
         # Proceed to team selection before creating entry
         return await self.async_step_teams()
 
