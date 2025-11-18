@@ -582,19 +582,14 @@ class LinearOptionsFlowHandler(config_entries.OptionsFlow):
                 return await self._build_options_team_states_form({})
 
             # All teams configured, update config entry
-            entry_data = {
-                CONF_TEAMS: self._selected_teams,
-                CONF_TEAM_STATES: self._team_states_config,
-            }
-            # Only add API token if it's not OAuth (OAuth tokens are stored separately)
+            # Start with a copy of the existing entry data to preserve all other fields (including refreshed OAuth tokens)
+            entry_data = dict(entry.data)
+            # Update only the specific fields needed
+            entry_data[CONF_TEAMS] = self._selected_teams
+            entry_data[CONF_TEAM_STATES] = self._team_states_config
+            # Only update API token if it's not OAuth (OAuth tokens are stored separately)
             if CONF_API_TOKEN in entry.data:
                 entry_data[CONF_API_TOKEN] = self._api_token
-            # Preserve OAuth data if present
-            entry_data.update({
-                key: value
-                for key, value in entry.data.items()
-                if key not in (CONF_TEAMS, CONF_TEAM_STATES, CONF_API_TOKEN)
-            })
 
             self.hass.config_entries.async_update_entry(entry, data=entry_data)
             return self.async_create_entry(data={})
