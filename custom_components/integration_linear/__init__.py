@@ -24,6 +24,7 @@ from .api import (
 from .const import CONF_API_TOKEN, DOMAIN, LOGGER
 from .coordinator import BlueprintDataUpdateCoordinator
 from .data import IntegrationBlueprintData
+from .oauth import async_get_valid_token
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant, ServiceCall
@@ -162,6 +163,7 @@ async def async_setup_entry(
 
     # Get API token - either from OAuth or from config entry data
     api_token: str
+    token_refresh_callback = None
     if CONF_API_TOKEN in entry.data:
         # API key authentication
         api_token = entry.data[CONF_API_TOKEN]
@@ -169,6 +171,13 @@ async def async_setup_entry(
         # OAuth authentication - token is stored in entry.data
         token = entry.data.get("token", {})
         api_token = token.get("access_token", "")
+        
+        # Create token refresh callback for OAuth
+        async def refresh_token() -> str:
+            """Refresh OAuth token and return new access token."""
+            return await async_get_valid_token(hass, entry)
+        
+        token_refresh_callback = refresh_token
 
     coordinator = BlueprintDataUpdateCoordinator(
         hass=hass,
@@ -180,6 +189,7 @@ async def async_setup_entry(
         client=IntegrationBlueprintApiClient(
             api_token=api_token,
             session=async_get_clientsession(hass),
+            token_refresh_callback=token_refresh_callback,
         ),
         integration=async_get_loaded_integration(hass, entry.domain),
         coordinator=coordinator,
