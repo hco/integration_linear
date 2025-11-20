@@ -212,7 +212,7 @@ class LinearTodoListEntity(
             state_id=state_id,
             description=item.description,
             due_date=self._format_due_date(item.due),
-            created_by_user=created_by_user.name,
+            created_by_user=created_by_user.name if created_by_user else None,
             created_by_user_avatar_url=avatar_url,
         )
 
