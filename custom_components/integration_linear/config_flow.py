@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.config_entry_oauth2_flow import (
+    AbstractOAuth2FlowHandler,
+    LocalOAuth2ImplementationWithPkce,
+)
 
 from .api import (
     IntegrationBlueprintApiClient,
@@ -17,20 +21,36 @@ from .api import (
 )
 from .const import CONF_API_TOKEN, CONF_TEAM_STATES, CONF_TEAMS, DOMAIN, LOGGER
 
+if TYPE_CHECKING:
+    from logging import Logger
 
-class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+# Hardcoded client_id for PKCE (no secret needed)
+LINEAR_CLIENT_ID = "c7e22e8ffc50ea46f48e3cfb8fe40175"
+LINEAR_AUTHORIZE_URL = "https://linear.app/oauth/authorize"
+LINEAR_TOKEN_URL = "https://api.linear.app/oauth/token"  # noqa: S105
+
+OAUTH_SCOPES = ["write"]
+class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
     """Config flow for Linear Integration."""
 
+    DOMAIN = DOMAIN
     VERSION = 1
 
     def __init__(self) -> None:
         """Initialize the config flow."""
+        super().__init__()
         self._teams: list[dict[str, str]] = []
         self._api_token: str = ""
         self._selected_teams: list[str] = []
         self._team_states: dict[str, list[dict[str, Any]]] = {}
         self._current_team_index: int = 0
         self._team_states_config: dict[str, dict[str, Any]] = {}
+        self._oauth_data: dict[str, Any] | None = None
+
+    @property
+    def logger(self) -> Logger:
+        """Return logger."""
+        return LOGGER
 
     @staticmethod
     def async_get_options_flow(
@@ -39,11 +59,50 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         """Return the options flow handler."""
         return LinearOptionsFlowHandler(config_entry)
 
+
+    @property
+    def extra_authorize_data(self) -> dict[str, Any]:
+        """Extra data that needs to be appended to the authorize url."""
+        return {
+            "scope": " ".join(OAUTH_SCOPES),
+            "prompt": "consent",
+        }
+
+    async def async_step_pick_implementation(
+        self, user_input: dict | None = None  # noqa: ARG002
+    ) -> config_entries.ConfigFlowResult:
+        """Handle picking implementation - bypass and use PKCE implementation."""
+        # Create our built-in OAuth implementation with PKCE
+        implementation = LocalOAuth2ImplementationWithPkce(
+            self.hass,
+            DOMAIN,
+            LINEAR_CLIENT_ID,
+            authorize_url=LINEAR_AUTHORIZE_URL,
+            token_url=LINEAR_TOKEN_URL,
+            client_secret="",  # Empty for PKCE public client
+            code_verifier_length=128,
+        )
+
+        # Store the implementation
+        self.flow_impl = implementation
+
+        # Proceed to auth step
+        return await self.async_step_auth()
+
     async def async_step_user(
+        self,
+        user_input: dict | None = None,  # noqa: ARG002
+    ) -> config_entries.ConfigFlowResult:
+        """Handle a flow initialized by the user."""
+        # Always use OAuth with our built-in PKCE implementation
+        # No need to configure credentials - client_id is hardcoded
+        return await self.async_step_pick_implementation()
+
+    async def async_step_api_key(
         self,
         user_input: dict | None = None,
     ) -> config_entries.ConfigFlowResult:
-        """Handle a flow initialized by the user."""
+        """Handle API key authentication."""
         _errors = {}
         if user_input is not None:
             try:
@@ -63,7 +122,7 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_teams()
 
         return self.async_show_form(
-            step_id="user",
+            step_id="api_key",
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_API_TOKEN): selector.TextSelector(
@@ -75,6 +134,35 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             errors=_errors,
         )
+
+    async def async_oauth_create_entry(
+        self, data: dict[str, Any]
+    ) -> config_entries.ConfigFlowResult:
+        """Create an entry for OAuth flow."""
+        # Store OAuth data for later use (preserve it through team selection)
+        self._oauth_data = data.copy()
+
+        # Get access token from OAuth data token
+        token = data["token"]
+        access_token = token["access_token"]
+
+        # Validate token and fetch teams
+        try:
+            client = IntegrationBlueprintApiClient(
+                api_token=access_token,
+                session=async_create_clientsession(self.hass),
+            )
+            await client.async_validate_token()
+            teams = await client.async_get_teams()
+        except IntegrationBlueprintApiClientError as exception:
+            LOGGER.exception(exception)
+            return self.async_abort(reason="oauth_fetch_teams_failed")
+
+        # Store teams temporarily and proceed to team selection
+        self._teams = teams
+        self._api_token = access_token
+        # Proceed to team selection before creating entry
+        return await self.async_step_teams()
 
     async def async_step_teams(
         self,
@@ -130,12 +218,13 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             errors=_errors,
         )
 
-    async def async_step_team_states(
+    async def async_step_team_states(  # noqa: PLR0911
         self,
         user_input: dict | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Handle team state configuration step - processes one team at a time."""
         _errors = {}
+
         client = IntegrationBlueprintApiClient(
             api_token=self._api_token,
             session=async_create_clientsession(self.hass),
@@ -203,13 +292,26 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self._build_team_states_form({})
 
             # All teams configured, create config entry
+            entry_data = {
+                CONF_TEAMS: self._selected_teams,
+                CONF_TEAM_STATES: self._team_states_config,
+            }
+
+            # If using OAuth, merge team data with OAuth data
+            if self._oauth_data:
+                # OAuth flow - merge team data with stored OAuth data
+                oauth_data = self._oauth_data.copy()
+                oauth_data.update(entry_data)
+                return self.async_create_entry(
+                    title="Linear",
+                    data=oauth_data,
+                )
+
+            # API key flow
+            entry_data[CONF_API_TOKEN] = self._api_token
             return self.async_create_entry(
                 title="Linear",
-                data={
-                    CONF_API_TOKEN: self._api_token,
-                    CONF_TEAMS: self._selected_teams,
-                    CONF_TEAM_STATES: self._team_states_config,
-                },
+                data=entry_data,
             )
 
         # Build initial form for current team
@@ -339,8 +441,14 @@ class LinearOptionsFlowHandler(config_entries.OptionsFlow):
         _errors = {}
         entry = self.config_entry
 
-        # Use existing token
-        self._api_token = entry.data.get(CONF_API_TOKEN, "")
+        # Get API token - either from OAuth or from config entry data
+        if CONF_API_TOKEN in entry.data:
+            # API key authentication
+            self._api_token = entry.data[CONF_API_TOKEN]
+        else:
+            # OAuth authentication - token is stored in entry.data
+            token = entry.data.get("token", {})
+            self._api_token = token.get("access_token", "")
 
         # Fetch teams if not already fetched
         if not self._teams:
@@ -470,14 +578,16 @@ class LinearOptionsFlowHandler(config_entries.OptionsFlow):
                 return await self._build_options_team_states_form({})
 
             # All teams configured, update config entry
-            self.hass.config_entries.async_update_entry(
-                entry,
-                data={
-                    CONF_API_TOKEN: self._api_token,
-                    CONF_TEAMS: self._selected_teams,
-                    CONF_TEAM_STATES: self._team_states_config,
-                },
-            )
+            # Start with a copy of the existing entry data to preserve all other fields (including refreshed OAuth tokens)
+            entry_data = dict(entry.data)
+            # Update only the specific fields needed
+            entry_data[CONF_TEAMS] = self._selected_teams
+            entry_data[CONF_TEAM_STATES] = self._team_states_config
+            # Only update API token if it's not OAuth (OAuth tokens are stored separately)
+            if CONF_API_TOKEN in entry.data:
+                entry_data[CONF_API_TOKEN] = self._api_token
+
+            self.hass.config_entries.async_update_entry(entry, data=entry_data)
             return self.async_create_entry(data={})
 
         # Build initial form for current team
