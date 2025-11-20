@@ -30,6 +30,7 @@ LINEAR_AUTHORIZE_URL = "https://linear.app/oauth/authorize"
 LINEAR_TOKEN_URL = "https://api.linear.app/oauth/token"  # noqa: S105
 
 OAUTH_SCOPES = ["write"]
+
 class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
     """Config flow for Linear Integration."""
 
@@ -65,6 +66,7 @@ class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
     def extra_authorize_data(self) -> dict[str, Any]:
         """Extra data that needs to be appended to the authorize url."""
         return {
+            "actor": "app",
             "scope": " ".join(OAUTH_SCOPES),
             "prompt": "consent",
         }
@@ -579,7 +581,8 @@ class LinearOptionsFlowHandler(config_entries.OptionsFlow):
                 return await self._build_options_team_states_form({})
 
             # All teams configured, update config entry
-            # Start with a copy of the existing entry data to preserve all other fields (including refreshed OAuth tokens)
+            # Start with a copy of the existing entry data to preserve all other fields,
+            # including refreshed OAuth tokens
             entry_data = dict(entry.data)
             # Update only the specific fields needed
             entry_data[CONF_TEAMS] = self._selected_teams

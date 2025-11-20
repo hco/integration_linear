@@ -335,8 +335,21 @@ class IntegrationBlueprintApiClient:
         state_id: str,
         description: str | None = None,
         due_date: str | None = None,
+        created_by_user: str | None = None,
+        created_by_user_avatar_url: str | None = None,
     ) -> dict[str, Any]:
-        """Create a new issue."""
+        """
+        Create a new issue.
+
+        Args:
+            title: The issue title
+            team_id: The team ID
+            state_id: The workflow state ID
+            description: Optional description
+            due_date: Optional due date (ISO 8601 format)
+            created_by_user: Name/identifier of the user creating the issue
+            created_by_user_avatar_url: URL of the user's avatar
+        """
         # Build variable declarations and input fields dynamically
         variable_declarations: list[str] = [
             "$title: String!",
@@ -353,6 +366,17 @@ class IntegrationBlueprintApiClient:
             "teamId": team_id,
             "stateId": state_id,
         }
+
+        # Add createAsUser if provided
+        if created_by_user:
+            variable_declarations.append("$createAsUser: String")
+            input_fields.append("createAsUser: $createAsUser")
+            variables["createAsUser"] = created_by_user
+
+        if created_by_user_avatar_url:
+            variable_declarations.append("$displayIconUrl: String")
+            input_fields.append("displayIconUrl: $displayIconUrl")
+            variables["displayIconUrl"] = created_by_user_avatar_url
 
         if description:
             variable_declarations.append("$description: String")
@@ -410,6 +434,7 @@ class IntegrationBlueprintApiClient:
         state_name_or_id: str | None = None,
         description: str | None = None,
         due_date: str | None = None,
+        created_by_user: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a new issue with advanced features.
@@ -422,6 +447,7 @@ class IntegrationBlueprintApiClient:
             state_name_or_id: State name or ID to set
             description: Optional description
             due_date: Optional due date (ISO 8601 format)
+            created_by_user: Name/identifier of the user creating the issue
 
         Raises:
             IntegrationBlueprintApiClientError: If user doesn't exist,
@@ -494,6 +520,11 @@ class IntegrationBlueprintApiClient:
             variable_declarations.append("$dueDate: TimelessDate")
             input_fields.append("dueDate: $dueDate")
             variables["dueDate"] = due_date
+
+        if created_by_user:
+            variable_declarations.append("$createAsUser: String")
+            input_fields.append("createAsUser: $createAsUser")
+            variables["createAsUser"] = created_by_user
 
         variable_decls_str = ",\n            ".join(variable_declarations)
         input_fields_str = ",\n                    ".join(input_fields)

@@ -86,7 +86,7 @@ async def _async_handle_create_issue(
         raise ValueError(msg)
 
     client = config_entry.runtime_data.client
-    LOGGER.info("Fetching Team ID")
+    LOGGER.debug("Fetching Team ID")
     # If team_identifier is provided, look up the team
     if team_identifier:
         team = await client.async_get_team_by_identifier(team_identifier)
@@ -94,6 +94,13 @@ async def _async_handle_create_issue(
             msg = f"Team with identifier '{team_identifier}' not found"
             raise HomeAssistantError(msg)
         team_id = team["id"]
+
+    # Get the current user from the service call context
+    created_by_user = None
+    if call.context.user_id:
+        user = await hass.auth.async_get_user(call.context.user_id)
+        if user:
+            created_by_user = user.name
 
     try:
         issue = await client.async_create_issue_advanced(
@@ -104,6 +111,7 @@ async def _async_handle_create_issue(
             state_name_or_id=state_name_or_id,
             description=description,
             due_date=due_date,
+            created_by_user=created_by_user,
         )
         LOGGER.info(
             "Created Linear issue: %s (ID: %s, URL: %s)",
