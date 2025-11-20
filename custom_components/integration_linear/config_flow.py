@@ -45,7 +45,6 @@ class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
         self._team_states: dict[str, list[dict[str, Any]]] = {}
         self._current_team_index: int = 0
         self._team_states_config: dict[str, dict[str, Any]] = {}
-        self._oauth_token: str | None = None
         self._oauth_data: dict[str, Any] | None = None
 
     @property
@@ -299,7 +298,7 @@ class BlueprintFlowHandler(AbstractOAuth2FlowHandler, domain=DOMAIN):
             }
 
             # If using OAuth, merge team data with OAuth data
-            if self._oauth_token and self._oauth_data:
+            if self._oauth_data:
                 # OAuth flow - merge team data with stored OAuth data
                 oauth_data = self._oauth_data.copy()
                 oauth_data.update(entry_data)
