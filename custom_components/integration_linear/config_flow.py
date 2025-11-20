@@ -447,12 +447,9 @@ class LinearOptionsFlowHandler(config_entries.OptionsFlow):
             # API key authentication
             self._api_token = entry.data[CONF_API_TOKEN]
         else:
-            # OAuth authentication - get token from implementation
-            implementation = await BlueprintFlowHandler.async_get_implementation(
-                self.hass, entry
-            )
-            token = await implementation.async_resolve_external_data(entry.data)
-            self._api_token = token.access_token
+            # OAuth authentication - token is stored in entry.data
+            token = entry.data.get("token", {})
+            self._api_token = token.get("access_token", "")
 
         # Fetch teams if not already fetched
         if not self._teams:
