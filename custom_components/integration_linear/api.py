@@ -571,7 +571,7 @@ class IntegrationBlueprintApiClient:
 
                 # Read response body before checking status
                 result = await response.json()
-                print("Response object:", repr(result))
+                LOGGER.debug("Response: %r", result)
 
 
                 # Check for HTTP errors
