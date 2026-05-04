@@ -24,6 +24,7 @@ from .api import (
 from .const import CONF_API_TOKEN, DOMAIN, LOGGER
 from .coordinator import BlueprintDataUpdateCoordinator
 from .data import IntegrationBlueprintData
+from .oauth import async_refresh_token
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant, ServiceCall
@@ -38,9 +39,7 @@ PLATFORMS: list[Platform] = [
 _SERVICE_REGISTERED = False
 
 
-async def _async_handle_create_issue(
-    hass: HomeAssistant, call: ServiceCall
-) -> None:
+async def _async_handle_create_issue(hass: HomeAssistant, call: ServiceCall) -> None:
     """Handle the create_issue service call."""
     team_id = call.data.get("team_id")
     team_identifier = call.data.get("team_identifier")
@@ -162,6 +161,7 @@ async def async_setup_entry(
 
     # Get API token - either from OAuth or from config entry data
     api_token: str
+    token_refresh_callback = None
     if CONF_API_TOKEN in entry.data:
         # API key authentication
         api_token = entry.data[CONF_API_TOKEN]
@@ -169,6 +169,17 @@ async def async_setup_entry(
         # OAuth authentication - token is stored in entry.data
         token = entry.data.get("token", {})
         api_token = token.get("access_token", "")
+
+        # The callback is invoked by the API client after an auth error, so
+        # force a refresh unconditionally — bypass the expiry-based shortcut
+        # in async_get_valid_token, which would otherwise re-hand out the
+        # current (server-rejected) token if expires_at hasn't passed yet.
+        async def refresh_token() -> str:
+            """Force-refresh the OAuth token and return the new access token."""
+            new_token = await async_refresh_token(hass, entry)
+            return new_token["access_token"]
+
+        token_refresh_callback = refresh_token
 
     coordinator = BlueprintDataUpdateCoordinator(
         hass=hass,
@@ -180,6 +191,7 @@ async def async_setup_entry(
         client=IntegrationBlueprintApiClient(
             api_token=api_token,
             session=async_get_clientsession(hass),
+            token_refresh_callback=token_refresh_callback,
         ),
         integration=async_get_loaded_integration(hass, entry.domain),
         coordinator=coordinator,

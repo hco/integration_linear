@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import socket
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import aiohttp
@@ -61,10 +63,13 @@ class IntegrationBlueprintApiClient:
         self,
         api_token: str,
         session: aiohttp.ClientSession,
+        token_refresh_callback: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         """Initialize Linear API Client."""
         self._api_token = api_token
         self._session = session
+        self._token_refresh_callback = token_refresh_callback
+        self._refresh_lock = asyncio.Lock()
 
     async def async_validate_token(self) -> None:
         """Validate the API token by making a simple query."""
@@ -550,6 +555,7 @@ class IntegrationBlueprintApiClient:
                 "Authorization": self._api_token,
                 "Content-Type": "application/json",
             },
+            retry_on_auth_error=True,
         )
 
     async def _api_wrapper(
@@ -558,6 +564,7 @@ class IntegrationBlueprintApiClient:
         url: str,
         data: dict | None = None,
         headers: dict | None = None,
+        retry_on_auth_error: bool = False,
     ) -> Any:
         """Get information from the API."""
         try:
@@ -573,6 +580,76 @@ class IntegrationBlueprintApiClient:
                 result = await response.json()
                 LOGGER.debug("Response: %r", result)
 
+                # Check for authentication errors
+                is_auth_error = False
+                if response.status in (HTTP_STATUS_UNAUTHORIZED, HTTP_STATUS_FORBIDDEN):
+                    is_auth_error = True
+                elif response.status >= HTTP_STATUS_BAD_REQUEST and "errors" in result:
+                    error_messages = []
+                    for err in result["errors"]:
+                        message = err.get("message", "Unknown error")
+                        error_messages.append(message)
+                        extensions = err.get("extensions", {})
+                        status_code = extensions.get("statusCode")
+                        is_unauthorized = "unauthorized" in message.lower()
+                        if status_code in (401, 403) or is_unauthorized:
+                            is_auth_error = True
+                            break
+
+                # Try to refresh token if we have a callback and this is an auth error
+                has_refresh = self._token_refresh_callback is not None
+                if is_auth_error and retry_on_auth_error and has_refresh:
+                    LOGGER.info(
+                        "Authentication error detected, attempting token refresh"
+                    )
+                    async with self._refresh_lock:
+                        # After acquiring the lock, check if another task
+                        # already refreshed by retrying with the current token
+                        retry_headers = dict(headers) if headers else {}
+                        retry_headers["Authorization"] = self._api_token
+                        response = await self._session.request(
+                            method=method,
+                            url=url,
+                            headers=retry_headers,
+                            json=data,
+                        )
+                        result = await response.json()
+
+                        # Check if the retry succeeded (token was already refreshed)
+                        is_still_unauthorized = response.status in (
+                            HTTP_STATUS_UNAUTHORIZED,
+                            HTTP_STATUS_FORBIDDEN,
+                        )
+                        if not is_still_unauthorized:
+                            # Another task already refreshed the token
+                            LOGGER.debug(
+                                "Token was already refreshed by another request"
+                            )
+                        else:
+                            # We need to refresh the token
+                            try:
+                                LOGGER.debug("Refreshing token")
+                                new_token = await self._token_refresh_callback()
+                                self._api_token = new_token
+                                # Retry the request with the new token
+                                retry_headers["Authorization"] = new_token
+                                LOGGER.debug("Retrying request with refreshed token")
+                                response = await self._session.request(
+                                    method=method,
+                                    url=url,
+                                    headers=retry_headers,
+                                    json=data,
+                                )
+                                result = await response.json()
+                                LOGGER.debug("Response after retry: %r", result)
+                            except Exception as refresh_exception:
+                                LOGGER.error(
+                                    "Token refresh failed: %s", refresh_exception
+                                )
+                                msg = "Invalid API token"
+                                raise IntegrationBlueprintApiClientAuthenticationError(
+                                    msg
+                                ) from refresh_exception
 
                 # Check for HTTP errors
                 if response.status in (HTTP_STATUS_UNAUTHORIZED, HTTP_STATUS_FORBIDDEN):
