@@ -642,11 +642,14 @@ class IntegrationBlueprintApiClient:
                                 )
                                 result = await response.json()
                                 LOGGER.debug("Response after retry: %r", result)
-                            except Exception as refresh_exception:  # noqa: BLE001
+                            except Exception as refresh_exception:
                                 LOGGER.error(
                                     "Token refresh failed: %s", refresh_exception
                                 )
-                                _raise_authentication_error()
+                                msg = "Invalid API token"
+                                raise IntegrationBlueprintApiClientAuthenticationError(
+                                    msg
+                                ) from refresh_exception
 
                 # Check for HTTP errors
                 if response.status in (HTTP_STATUS_UNAUTHORIZED, HTTP_STATUS_FORBIDDEN):

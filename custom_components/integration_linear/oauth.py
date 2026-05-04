@@ -43,11 +43,14 @@ async def async_get_valid_token(
     token = entry.data["token"]
     access_token = token.get("access_token", "")
 
-    # Check if token is expired or about to expire (within 60 seconds)
-    expires_at = token.get("expires_at", 0)
-    if expires_at and time.time() >= (expires_at - 60):
-        # Token is expired or about to expire, refresh it
-        LOGGER.debug("Token expired or about to expire, refreshing")
+    # Refresh if expiry is missing/0 or within 60s of now — a missing expiry
+    # means we can't trust the token, so force a refresh rather than returning
+    # a possibly-stale one.
+    expires_at = token.get("expires_at")
+    if not expires_at or time.time() >= (expires_at - 60):
+        LOGGER.debug(
+            "Token expired, missing expiration, or about to expire, refreshing"
+        )
         token = await async_refresh_token(hass, entry)
 
     return token.get("access_token", access_token)
@@ -106,4 +109,3 @@ async def async_refresh_token(
 
         LOGGER.debug("OAuth token refreshed successfully")
         return new_token
-
